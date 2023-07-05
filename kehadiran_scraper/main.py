@@ -1,6 +1,7 @@
 import asyncio
 import datetime as dt
 import logging
+import os
 import typing as t
 
 import aiofiles
@@ -81,6 +82,7 @@ async def scrape():
 
 
 def main():
+    os.makedirs(TEST_OUTPUT_DIR, exist_ok=True)
     asyncio.run(scrape())
 
 
