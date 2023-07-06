@@ -29,9 +29,9 @@ LOG_LEVEL=INFO \
 # Set the log level (DEBUG, INFO, ERROR)
 \
 USE_WHITELIST=0 \
-# Set whether or not to use whilelist-dates file. If truthy,
-# we will make requests only using the dates in the file. If
-# false, we will make request for each date between MAX_DATE
+# Set whether or not to use whilelist-dates file. If truthy (non-zero
+# integer), we will make requests only using the dates in the file. If
+# false (0), we will make request for each date between MAX_DATE
 # and MIN_DATE (See below). Either way, we will populate
 # these files as we discover a successful date.
 \
