@@ -137,9 +137,9 @@ def main():
                     visited_dates=visited_dates,
                 )
             except aiohttp.ServerConnectionError:
-                t = 5
-                logger.info("Server disconnected error. Trying again after %s seconds", t)
-                await asyncio.sleep(t)
+                t_s = 5
+                logger.info("Server disconnected error. Trying again after %s seconds", t_s)
+                await asyncio.sleep(t_s)
                 max_date = min(visited_dates)
             except Exception as exception:
                 logger.error("Unexpected error occured, exiting. Error: %s", exception)
