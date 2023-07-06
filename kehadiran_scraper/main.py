@@ -9,6 +9,7 @@ import aiohttp
 
 SCRAPE_CHUNK_SIZE = int(environ.get("SCRAPE_CHUNK_SIZE", 50))
 SLEEP_S = float(environ.get("SLEEP_S", 0.5))
+DISCONNECT_BACKOFF_S = float(environ.get("DISCONNECT_BACKOFF_S", 10))
 MIN_DATE = dt.datetime.strptime(environ.get("MIN_DATE", "1959-09-11"), "%Y-%m-%d").date()
 MAX_DATE = dt.datetime.strptime(environ.get("MAX_DATE", dt.datetime.today()), "%Y-%m-%d").date()
 USE_WHITELIST = bool(int(environ.get("USE_WHITELIST", "0")))
@@ -137,9 +138,8 @@ def main():
                     visited_dates=visited_dates,
                 )
             except aiohttp.ServerConnectionError:
-                t_s = 5
-                logger.info("Server disconnected error. Trying again after %s seconds", t_s)
-                await asyncio.sleep(t_s)
+                logger.info("Server disconnected error. Trying again after %s seconds", DISCONNECT_BACKOFF_S)
+                await asyncio.sleep(DISCONNECT_BACKOFF_S)
                 max_date = min(visited_dates)
             except Exception as exception:
                 logger.error("Unexpected error occured, exiting. Error: %s", exception)
