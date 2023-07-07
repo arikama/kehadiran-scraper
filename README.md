@@ -56,4 +56,4 @@ DISCONNECT_BACKOFF_S=10 \
 python kehadiran_scraper/main.py
 ```
 
-The hansard pdf files can found out at `output/` directory. The whitelisted dates can be found at `whitelist-dates` file. If you ran the script and exited successful, and found out that these files have changed, please create a branch, commit these two files and file a PR. This might mean that they have uploaded new and updated files.
+The hansard pdf files can found out at `output/` directory. The whitelisted dates can be found at `whitelist-dates` file. If you ran the script and exited successful, and found out that these files have changed, please create a branch, commit these two files and file a PR. This might mean that they have uploaded new or updated files.

@@ -141,9 +141,6 @@ def main():
                 logger.info("Server disconnected error. Trying again after %s seconds", DISCONNECT_BACKOFF_S)
                 await asyncio.sleep(DISCONNECT_BACKOFF_S)
                 max_date = min(visited_dates)
-            except Exception as exception:
-                logger.error("Unexpected error occured, exiting. Error: %s", exception)
-                return
             else:
                 logger.info("All dates have been scraped. Exiting with success.")
                 return
