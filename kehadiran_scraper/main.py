@@ -23,15 +23,15 @@ T = t.TypeVar("T")
 logger = logging.getLogger("kehadiran_scraper.main")
 
 
-def _chunker(it: t.Iterator[T], size: int) -> t.Iterator[t.Iterator[T]]:
+def _chunker(it: t.Iterator[T], size: int) -> t.Iterator[list[T]]:
     chunk = []
     for item in it:
         chunk.append(item)
         if len(chunk) == size:
-            yield iter(chunk)
+            yield chunk
             chunk = []
     if chunk:
-        yield iter(chunk)
+        yield chunk
 
 
 def _url_generator(
@@ -73,18 +73,15 @@ async def download(
     url: str,
     session: aiohttp.ClientSession,
 ) -> tuple[t.Optional[bytes], t.Optional[str]]:
-    logger.debug("Downloading from %s", url)
     async with session.get(url) as response:
         data: bytes = await response.read()
         if b"File does not exist" in data:
-            logger.debug("Url %s does not contain file", url)
             return (None, url)
         return data, url
 
 
 async def save(data: bytes, url: str, date: dt.date):
     filename: str = OUTPUT_DIR + dt.date.strftime(date, "%Y-%m-%d") + ".pdf"
-    logger.info("Found file from %s, dumping to file %s", url, filename)
     async with aiofiles.open(filename, mode="wb") as fo:
         await fo.write(data)
 
@@ -107,6 +104,11 @@ async def scrape(min_date: dt.date, max_date: dt.date, visited_dates: list[dt.da
                 task = download(url=url, session=session)
                 download_tasks.append(task)
                 url_to_date[url] = cur_date
+            
+            logger.info(
+                "Downloading files %s urls, from %s to %s",
+                *(len(download_tasks), url_to_date[urls[0][0]], url_to_date[urls[-1][0]]),
+            )
             files = await asyncio.gather(*download_tasks)
 
             save_tasks = []
@@ -116,8 +118,13 @@ async def scrape(min_date: dt.date, max_date: dt.date, visited_dates: list[dt.da
                 cur_date = url_to_date[url]
                 save_tasks.append(save(data=data, url=url, date=cur_date))
                 whitelist.add(cur_date)
-            await asyncio.gather(*save_tasks, asyncio.sleep(SLEEP_S))
-            await _update_whitelist_to_file(whitelist=whitelist)
+            
+            logger.info("Saving %s downloaded files & updating whitelist to disk", len(save_tasks))
+            await asyncio.gather(
+                *save_tasks,
+                _update_whitelist_to_file(whitelist=whitelist),
+                asyncio.sleep(SLEEP_S),
+            )
             for cur_date in url_to_date.values():
                 visited_dates.append(cur_date)
 
