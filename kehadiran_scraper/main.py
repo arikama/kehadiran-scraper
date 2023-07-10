@@ -7,15 +7,16 @@ import typing as t
 import aiofiles
 import aiohttp
 
-SCRAPE_CHUNK_SIZE = int(environ.get("SCRAPE_CHUNK_SIZE", 50))
+# SCRAPE_CHUNK_SIZE = int(environ.get("SCRAPE_CHUNK_SIZE", 50))
+SCRAPE_CHUNK_SIZE = int(environ.get("SCRAPE_CHUNK_SIZE", 5))
 SLEEP_S = float(environ.get("SLEEP_S", 0.5))
 DISCONNECT_BACKOFF_S = float(environ.get("DISCONNECT_BACKOFF_S", 10))
 MIN_DATE = dt.datetime.strptime(environ.get("MIN_DATE", "1959-09-11"), "%Y-%m-%d").date()
-MAX_DATE = dt.datetime.strptime(environ.get("MAX_DATE", dt.datetime.today()), "%Y-%m-%d").date()
-USE_WHITELIST = bool(int(environ.get("USE_WHITELIST", "0")))
+MAX_DATE_DEFAULT = dt.datetime.strftime(dt.datetime.today(), "%Y-%m-%d")
+MAX_DATE = dt.datetime.strptime(environ.get("MAX_DATE", MAX_DATE_DEFAULT), "%Y-%m-%d").date()
 URL_PATTERN = "https://www.parlimen.gov.my/files/hindex/pdf/DR-{day}{month}{year}.pdf"
 OUTPUT_DIR = "output/"
-WHITE_LIST_FILENAME = "whitelist-dates"
+BLACKLIST_FILENAME = ".blacklist"
 LOG_LEVEL = environ.get("LOG_LEVEL", "DEBUG")
 
 T = t.TypeVar("T")
@@ -37,15 +38,14 @@ def _chunker(it: t.Iterator[T], size: int) -> t.Iterator[list[T]]:
 def _url_generator(
     min_date: dt.date,
     max_date: dt.date,
-    whitelist: set[dt.date],
-    use_whitelist: bool,
+    blacklist: set[dt.date],
 ) -> t.Iterator[tuple[str, dt.date]]:
     days = (max_date - min_date).days
     for i in range(days):
         cur_date: dt.date = max_date - dt.timedelta(days=i)
-        if use_whitelist:
-            if cur_date not in whitelist:
-                continue
+        if cur_date in blacklist:
+            logger.debug("%s is blacklisted, skipping", cur_date)
+            continue
         url: str = URL_PATTERN.format(
             day=str(cur_date.day).zfill(2),
             month=str(cur_date.month).zfill(2),
@@ -54,19 +54,26 @@ def _url_generator(
         yield url, cur_date
 
 
-async def _get_whitelist_dates_from_file() -> set[dt.date]:
+async def _get_blacklist_dates_from_file() -> set[dt.date]:
     s: set[dt.date] = set()
-    async with aiofiles.open(WHITE_LIST_FILENAME, mode="r") as fi:
+    async with aiofiles.open(BLACKLIST_FILENAME, mode="r") as fi:
         async for line in fi:
+            line = line.strip("\n")
+            if not line:
+                continue
             date = dt.date.fromisoformat(line.strip("\n"))
             s.add(date)
     return s
 
 
-async def _update_whitelist_to_file(whitelist: set[dt.date]) -> None:
-    async with aiofiles.open(WHITE_LIST_FILENAME, mode="w") as fo:
-        whitelist_sorted = "\n".join(sorted(str(d) for d in whitelist))
-        await fo.write(whitelist_sorted)
+async def _update_blacklist_to_file(blacklist: set[dt.date]) -> None:
+    blacklist_existing: set[dt.date] = await _get_blacklist_dates_from_file()
+    blacklist = blacklist - blacklist_existing
+    async with aiofiles.open(BLACKLIST_FILENAME, mode="a") as fo:
+        blacklist_sorted = "\n".join(sorted((str(d) for d in blacklist), reverse=True))
+        if blacklist_sorted:
+            blacklist_sorted = "\n" + blacklist_sorted
+        await fo.write(blacklist_sorted)
 
 
 async def download(
@@ -87,14 +94,13 @@ async def save(data: bytes, url: str, date: dt.date):
 
 
 async def scrape(min_date: dt.date, max_date: dt.date, visited_dates: list[dt.date]):
-    whitelist: set[dt.date] = await _get_whitelist_dates_from_file()
+    blacklist: set[dt.date] = await _get_blacklist_dates_from_file()
 
     async with aiohttp.ClientSession() as session:
         urls_iter: t.Iterator[tuple[str, dt.date]] = _url_generator(
             min_date=min_date,
             max_date=max_date,
-            whitelist=whitelist,
-            use_whitelist=USE_WHITELIST,
+            blacklist=blacklist,
         )
 
         for urls in _chunker(urls_iter, size=SCRAPE_CHUNK_SIZE):
@@ -106,23 +112,23 @@ async def scrape(min_date: dt.date, max_date: dt.date, visited_dates: list[dt.da
                 url_to_date[url] = cur_date
             
             logger.info(
-                "Downloading files %s urls, from %s to %s",
+                "Downloading files from %s urls, from %s to %s",
                 *(len(download_tasks), url_to_date[urls[0][0]], url_to_date[urls[-1][0]]),
             )
             files = await asyncio.gather(*download_tasks)
 
             save_tasks = []
             for data, url in files:
-                if data is None:
-                    continue
                 cur_date = url_to_date[url]
+                if data is None:
+                    blacklist.add(cur_date)
+                    continue
                 save_tasks.append(save(data=data, url=url, date=cur_date))
-                whitelist.add(cur_date)
             
-            logger.info("Saving %s downloaded files & updating whitelist to disk", len(save_tasks))
+            logger.info("Saving %s downloaded files & updating blacklist to disk", len(save_tasks))
             await asyncio.gather(
                 *save_tasks,
-                _update_whitelist_to_file(whitelist=whitelist),
+                _update_blacklist_to_file(blacklist=blacklist),
                 asyncio.sleep(SLEEP_S),
             )
             for cur_date in url_to_date.values():
