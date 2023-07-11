@@ -9,7 +9,6 @@ import typing as t
 import aiofiles
 import aiohttp
 
-# SCRAPE_CHUNK_SIZE = int(environ.get("SCRAPE_CHUNK_SIZE", 50))
 SCRAPE_CHUNK_SIZE = int(environ.get("SCRAPE_CHUNK_SIZE", 5))
 SLEEP_S = float(environ.get("SLEEP_S", 0.5))
 DISCONNECT_BACKOFF_S = float(environ.get("DISCONNECT_BACKOFF_S", 10))
