@@ -30,21 +30,31 @@ T = t.TypeVar("T")
 logger = logging.getLogger("kehadiran_scraper.main")
 
 
-async def download(
-    url: str,
-    session: aiohttp.ClientSession,
-) -> tuple[t.Optional[bytes], t.Optional[str]]:
-    async with session.get(url) as response:
-        data: bytes = await response.read()
-        if b"File does not exist" in data:
-            return (None, url)
-        return data, url
+def main():
+    async def _keep_retrying():
+        visited_dates = []
+        min_date = MIN_DATE
+        max_date = MAX_DATE
 
+        while True:
+            try:
+                await scrape(
+                    min_date=min_date,
+                    max_date=max_date,
+                    visited_dates=visited_dates,
+                )
+            except aiohttp.ServerConnectionError:
+                logger.warning(
+                    "Server disconnected error. Trying again after %s seconds",
+                    DISCONNECT_BACKOFF_S,
+                )
+                await asyncio.sleep(DISCONNECT_BACKOFF_S)
+                max_date = min(visited_dates)
+            else:
+                logger.info("All dates have been scraped. Exiting with success.")
+                return
 
-async def save(data: bytes, url: str, date: dt.date):
-    filename: str = OUTPUT_DIR + dt.date.strftime(date, "%Y-%m-%d") + ".pdf"
-    async with aiofiles.open(filename, mode="wb") as fo:
-        await fo.write(data)
+    asyncio.run(_keep_retrying())
 
 
 async def scrape(min_date: dt.date, max_date: dt.date, visited_dates: list[dt.date]):
@@ -104,31 +114,21 @@ async def scrape(min_date: dt.date, max_date: dt.date, visited_dates: list[dt.da
                 visited_dates.append(cur_date)
 
 
-def main():
-    async def _keep_retrying():
-        visited_dates = []
-        min_date = MIN_DATE
-        max_date = MAX_DATE
+async def download(
+    url: str,
+    session: aiohttp.ClientSession,
+) -> tuple[t.Optional[bytes], t.Optional[str]]:
+    async with session.get(url) as response:
+        data: bytes = await response.read()
+        if b"File does not exist" in data:
+            return (None, url)
+        return data, url
 
-        while True:
-            try:
-                await scrape(
-                    min_date=min_date,
-                    max_date=max_date,
-                    visited_dates=visited_dates,
-                )
-            except aiohttp.ServerConnectionError:
-                logger.warning(
-                    "Server disconnected error. Trying again after %s seconds",
-                    DISCONNECT_BACKOFF_S,
-                )
-                await asyncio.sleep(DISCONNECT_BACKOFF_S)
-                max_date = min(visited_dates)
-            else:
-                logger.info("All dates have been scraped. Exiting with success.")
-                return
 
-    asyncio.run(_keep_retrying())
+async def save(data: bytes, url: str, date: dt.date):
+    filename: str = OUTPUT_DIR + dt.date.strftime(date, "%Y-%m-%d") + ".pdf"
+    async with aiofiles.open(filename, mode="wb") as fo:
+        await fo.write(data)
 
 
 def _chunker(it: t.Iterator[T], size: int) -> t.Iterator[list[T]]:
