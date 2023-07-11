@@ -33,7 +33,7 @@ MAX_DATE=2023-07-09 \
 DISCONNECT_BACKOFF_S=5 \
 python kehadiran_scraper/main.py
 
-# LOG_LEVEL: Set the log level (DEBUG, INFO, ERROR)
+# LOG_LEVEL: Set the log level (DEBUG, INFO, WARNING, ERROR)
 #
 # SLEEP_S: Set the time in seconds to sleep before each chunk
 #
