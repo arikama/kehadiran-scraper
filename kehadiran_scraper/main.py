@@ -30,70 +30,6 @@ T = t.TypeVar("T")
 logger = logging.getLogger("kehadiran_scraper.main")
 
 
-def _chunker(it: t.Iterator[T], size: int) -> t.Iterator[list[T]]:
-    chunk = []
-    for item in it:
-        chunk.append(item)
-        if len(chunk) == size:
-            yield chunk
-            chunk = []
-    if chunk:
-        yield chunk
-
-
-def _url_generator(
-    min_date: dt.date,
-    max_date: dt.date,
-    blacklist: set[dt.date],
-) -> t.Iterator[tuple[str, dt.date]]:
-    days = (max_date - min_date).days
-    for i in range(days):
-        cur_date: dt.date = max_date - dt.timedelta(days=i)
-        if cur_date in blacklist:
-            logger.debug("%s is blacklisted, skipping", cur_date)
-            continue
-        url: str = URL_PATTERN.format(
-            day=str(cur_date.day).zfill(2),
-            month=str(cur_date.month).zfill(2),
-            year=cur_date.year,
-        )
-        yield url, cur_date
-
-
-async def _get_blacklist_dates_from_file(
-    create_if_not_exist: bool = False,
-) -> set[dt.date]:
-    s: set[dt.date] = set()
-    if create_if_not_exist:
-        if not os.path.exists(BLACKLIST_FILENAME):
-            # Open and close immediately to create new empty file
-            f = await aiofiles.open(BLACKLIST_FILENAME, mode="w")
-            await f.close()
-
-    async with aiofiles.open(BLACKLIST_FILENAME, mode="r") as fi:
-        async for line in fi:
-            line = line.strip("\n")
-            date = dt.date.fromisoformat(line.strip("\n"))
-            s.add(date)
-    return s
-
-
-async def _update_blacklist_to_file(blacklist: set[dt.date]) -> None:
-    blacklist_existing: set[dt.date] = await _get_blacklist_dates_from_file()
-    blacklist = blacklist - blacklist_existing
-    async with aiofiles.open(BLACKLIST_FILENAME, mode="a") as fo:
-        blacklist_sorted = "\n".join(sorted((str(d) for d in blacklist), reverse=True))
-        if blacklist_existing and blacklist_sorted:
-            blacklist_sorted = "\n" + blacklist_sorted
-        await fo.write(blacklist_sorted)
-
-
-async def _stagger(task: t.Awaitable[T], t_s: float) -> T:
-    await asyncio.sleep(t_s)
-    ret: T = await task
-    return ret
-
-
 async def download(
     url: str,
     session: aiohttp.ClientSession,
@@ -193,6 +129,70 @@ def main():
                 return
 
     asyncio.run(_keep_retrying())
+
+
+def _chunker(it: t.Iterator[T], size: int) -> t.Iterator[list[T]]:
+    chunk = []
+    for item in it:
+        chunk.append(item)
+        if len(chunk) == size:
+            yield chunk
+            chunk = []
+    if chunk:
+        yield chunk
+
+
+def _url_generator(
+    min_date: dt.date,
+    max_date: dt.date,
+    blacklist: set[dt.date],
+) -> t.Iterator[tuple[str, dt.date]]:
+    days = (max_date - min_date).days
+    for i in range(days):
+        cur_date: dt.date = max_date - dt.timedelta(days=i)
+        if cur_date in blacklist:
+            logger.debug("%s is blacklisted, skipping", cur_date)
+            continue
+        url: str = URL_PATTERN.format(
+            day=str(cur_date.day).zfill(2),
+            month=str(cur_date.month).zfill(2),
+            year=cur_date.year,
+        )
+        yield url, cur_date
+
+
+async def _get_blacklist_dates_from_file(
+    create_if_not_exist: bool = False,
+) -> set[dt.date]:
+    s: set[dt.date] = set()
+    if create_if_not_exist:
+        if not os.path.exists(BLACKLIST_FILENAME):
+            # Open and close immediately to create new empty file
+            f = await aiofiles.open(BLACKLIST_FILENAME, mode="w")
+            await f.close()
+
+    async with aiofiles.open(BLACKLIST_FILENAME, mode="r") as fi:
+        async for line in fi:
+            line = line.strip("\n")
+            date = dt.date.fromisoformat(line.strip("\n"))
+            s.add(date)
+    return s
+
+
+async def _update_blacklist_to_file(blacklist: set[dt.date]) -> None:
+    blacklist_existing: set[dt.date] = await _get_blacklist_dates_from_file()
+    blacklist = blacklist - blacklist_existing
+    async with aiofiles.open(BLACKLIST_FILENAME, mode="a") as fo:
+        blacklist_sorted = "\n".join(sorted((str(d) for d in blacklist), reverse=True))
+        if blacklist_existing and blacklist_sorted:
+            blacklist_sorted = "\n" + blacklist_sorted
+        await fo.write(blacklist_sorted)
+
+
+async def _stagger(task: t.Awaitable[T], t_s: float) -> T:
+    await asyncio.sleep(t_s)
+    ret: T = await task
+    return ret
 
 
 if __name__ == "__main__":
