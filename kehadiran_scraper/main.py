@@ -2,11 +2,12 @@ import asyncio
 import datetime as dt
 import logging
 from os import environ
-import os
 from random import random
 import typing as t
+from xmlrpc.client import TRANSPORT_ERROR
 
 import aiofiles
+from aiofiles import os, ospath
 import aiohttp
 
 SCRAPE_CHUNK_SIZE = int(environ.get("SCRAPE_CHUNK_SIZE", 5))
@@ -20,7 +21,7 @@ MAX_DATE = dt.datetime.strptime(
     environ.get("MAX_DATE", MAX_DATE_DEFAULT), "%Y-%m-%d"
 ).date()
 URL_PATTERN = "https://www.parlimen.gov.my/files/hindex/pdf/DR-{day}{month}{year}.pdf"
-OUTPUT_DIR = "output/"
+OUTPUT_DIR = environ.get("OUTPUT_DIR", "output/")
 BLACKLIST_FILENAME = ".blacklist"
 LOG_LEVEL = environ.get("LOG_LEVEL", "DEBUG")
 
@@ -98,7 +99,7 @@ async def scrape(min_date: dt.date, max_date: dt.date, visited_dates: list[dt.da
                 if data is None:
                     blacklist_new.add(cur_date)
                     continue
-                save_tasks.append(save(data=data, url=url, date=cur_date))
+                save_tasks.append(save(data=data, date=cur_date))
             blacklist.update(blacklist_new)
 
             logger.info(
@@ -124,7 +125,19 @@ async def download(
         return data, url
 
 
-async def save(data: bytes, url: str, date: dt.date):
+async def save(data: bytes, date: dt.date):
+
+    async def _mkdir_if_not_exist(dirname: str) -> bool:
+        try:
+            await os.stat(dirname)
+            await os.mkdir(OUTPUT_DIR)
+            return True
+        except (ValueError, OSError):
+            return False
+
+    async with asyncio.Lock():
+        await _mkdir_if_not_exist(OUTPUT_DIR)
+
     filename: str = OUTPUT_DIR + dt.date.strftime(date, "%Y-%m-%d") + ".pdf"
     async with aiofiles.open(filename, mode="wb") as fo:
         await fo.write(data)
@@ -165,7 +178,7 @@ async def _get_blacklist_dates_from_file(
 ) -> set[dt.date]:
     s: set[dt.date] = set()
     if create_if_not_exist:
-        if not os.path.exists(BLACKLIST_FILENAME):
+        if not await ospath.exists(BLACKLIST_FILENAME):
             # Open and close immediately to create new empty file
             f = await aiofiles.open(BLACKLIST_FILENAME, mode="w")
             await f.close()

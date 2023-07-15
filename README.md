@@ -31,6 +31,7 @@ SLEEP_S=0.25 \
 MIN_DATE=2015-01-01 \
 MAX_DATE=2023-07-09 \
 DISCONNECT_BACKOFF_S=5 \
+OUTPUT_DIR=some_output_dir \
 python kehadiran_scraper/main.py
 
 # LOG_LEVEL: Set the log level (DEBUG, INFO, WARNING, ERROR)
@@ -47,6 +48,9 @@ python kehadiran_scraper/main.py
 # trying again  after getting a "Server disconnected" error. On each next try,
 # we try again from the last date that failed so we're not going
 # to do redundant work
+#
+# OUTPUT_DIR: Directory to save the output pdf files. Thedirectory will
+# be automatically created if it doesn't exist.
 ```
 
 The hansard pdf files can found out at `output/` directory. The blacklisted dates will be generated at `.blacklist` file and the file will be populated as the script is running, so that if you run the script again with the same dates, it will run faster. If you ran the script and exited successful, and found out that the files in `output/` have changed, please create a branch, commit these two files and file a PR. This might mean that they have uploaded new or updated files.
