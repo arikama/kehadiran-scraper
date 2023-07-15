@@ -138,7 +138,10 @@ async def save(data: bytes, date: dt.date):
     async with asyncio.Lock():
         await _mkdir_if_not_exist(OUTPUT_DIR)
 
-    filename: str = OUTPUT_DIR + dt.date.strftime(date, "%Y-%m-%d") + ".pdf"
+    filename: str = ospath.path.join(
+        OUTPUT_DIR,
+        dt.date.strftime(date, "%Y-%m-%d") + ".pdf",
+    )
     async with aiofiles.open(filename, mode="wb") as fo:
         await fo.write(data)
 
